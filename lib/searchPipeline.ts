@@ -55,6 +55,30 @@ export function expandQueries(query: string): string[] {
     ];
   }
 
+  if (lower.includes("spring") || base.includes("스프링")) {
+    return [
+      "site:docs.spring.io Spring Boot official documentation",
+      "site:spring.io Spring framework official guides documentation",
+      "site:docs.spring.io Spring reference documentation official docs",
+    ];
+  }
+
+  if (lower.includes("rust") || base.includes("러스트")) {
+    return [
+      "site:doc.rust-lang.org Rust official documentation book",
+      "site:doc.rust-lang.org Rust standard library official docs",
+      "site:rust-lang.org Rust official documentation guides",
+    ];
+  }
+
+  if (/\bgo\b|golang/.test(lower) || base.includes("고 언어")) {
+    return [
+      "site:go.dev Go official documentation",
+      "site:pkg.go.dev Go standard library official docs",
+      "site:go.dev Go tutorial official documentation",
+    ];
+  }
+
   const normalized = base.replace(/공식 문서 기준으로|공식문서 기준으로|정리해줘|알려줘/g, "").trim() || base;
   const variants = [
     `${normalized} official documentation`,
@@ -113,12 +137,13 @@ export function rankResults(items: SerpItem[], originalQuery: string): RankedIte
       const rrf = 1 / (60 + item.rank);
       const coverage = item.sourceQuery === originalQuery ? 0.9 : 0.7;
       const domainDiversity = 1 / (domainCounts.get(domain) ?? 1);
-      const isOfficialDomain = domain === "react.dev" || domain === "ko.react.dev" || /(^|\.)(nextjs\.org|docs\.stripe\.com|stripe\.com|developer\.mozilla\.org|docs\.brightdata\.com)$/.test(domain);
+      const isOfficialDomain = domain === "react.dev" || domain === "ko.react.dev" || domain === "rust-lang.org" || /(^|\.)(nextjs\.org|docs\.stripe\.com|stripe\.com|developer\.mozilla\.org|docs\.brightdata\.com|docs\.spring\.io|spring\.io|doc\.rust-lang\.org|go\.dev|pkg\.go\.dev)$/.test(domain);
       const reactSpecificBoost = (domain === "react.dev" || domain === "ko.react.dev") ? 0.2 : 0;
       const suspiciousSubdomainPenalty = /^\d+\.react\.dev$/.test(domain) ? 0.3 : 0;
+      const communityPenalty = /^(users\.rust-lang\.org|forum\.golangbridge\.org)$/.test(domain) ? 0.25 : 0;
       const officialBoost = isOfficialDomain ? 0.45 : domain.startsWith("docs.") ? 0.35 : 0;
       const githubBoost = domain === "github.com" ? 0.12 : 0;
-      const score = Number(((rrf * 40) + (coverage * 20) + (domainDiversity * 15) + (bm25Lite * 15) + (officialBoost * 40) + (reactSpecificBoost * 40) + (githubBoost * 20) - (suspiciousSubdomainPenalty * 40)).toFixed(4));
+      const score = Number(((rrf * 40) + (coverage * 20) + (domainDiversity * 15) + (bm25Lite * 15) + (officialBoost * 40) + (reactSpecificBoost * 40) + (githubBoost * 20) - (suspiciousSubdomainPenalty * 40) - (communityPenalty * 40)).toFixed(4));
       return { ...item, domain, score, signals: { rrf, coverage, domainDiversity, bm25Lite } };
     })
     .sort((a, b) => b.score - a.score)

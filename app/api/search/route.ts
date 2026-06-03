@@ -3,11 +3,16 @@ import { expandQueries, fixtureItems, parseBrightDataResponse, rankResults, type
 
 export const runtime = "nodejs";
 
+function getBrightDataConfig() {
+  const apiKey = process.env.BRIGHT_DATA_API_KEY ?? process.env.BRIGHTDATA_API_KEY ?? process.env.BD_API_KEY;
+  const zone = process.env.BRIGHT_DATA_SERP_ZONE ?? process.env.BRIGHTDATA_SERP_ZONE ?? process.env.BD_ZONE ?? "serp_api1";
+  return { apiKey, zone };
+}
+
 async function fetchBrightDataSerp(query: string): Promise<SerpItem[]> {
-  const apiKey = process.env.BRIGHT_DATA_API_KEY;
-  const zone = process.env.BRIGHT_DATA_SERP_ZONE ?? "serp_api1";
+  const { apiKey, zone } = getBrightDataConfig();
   if (!apiKey) {
-    throw new Error("BRIGHT_DATA_API_KEY is missing. Set it in .env.local or Vercel Environment Variables.");
+    throw new Error("Bright Data API key is missing. Set BRIGHT_DATA_API_KEY, BRIGHTDATA_API_KEY, or BD_API_KEY in .env.local or Vercel Environment Variables.");
   }
 
   const url = new URL("https://www.google.com/search");
@@ -61,7 +66,7 @@ export async function GET(req: NextRequest) {
     if (!allowFixture) {
       return NextResponse.json({
         error: error instanceof Error ? error.message : "Unknown Bright Data error",
-        hint: "Production must set BRIGHT_DATA_API_KEY and BRIGHT_DATA_SERP_ZONE. Add ?fixture=1 only for offline screenshots, not for the submitted live demo.",
+        hint: "Production must set BRIGHT_DATA_API_KEY/BRIGHTDATA_API_KEY/BD_API_KEY and BRIGHT_DATA_SERP_ZONE/BRIGHTDATA_SERP_ZONE/BD_ZONE. Add ?fixture=1 only for offline screenshots, not for the submitted live demo.",
       }, { status: 500 });
     }
 

@@ -1,74 +1,45 @@
-"use client";
+import Link from "next/link";
 
-import { useState } from "react";
-import type { SearchResponse } from "@/lib/searchPipeline";
+const labs = [
+  {
+    href: "/dev-error-search",
+    title: "1. 개발자 에러 리서치",
+    desc: "에러 메시지 → 공식문서/GitHub/StackOverflow/블로그 raw 결과 → 클러스터링 → 리랭킹",
+  },
+  {
+    href: "/travel-search",
+    title: "2. 여행·호텔 리서치",
+    desc: "호텔 검색 → 예약사이트/후기/커뮤니티 결과를 도메인별로 묶고 필터링",
+  },
+  {
+    href: "/product-search",
+    title: "3. 제품 후기 리서치",
+    desc: "전자제품 검색 → 쇼핑몰/커뮤니티/유튜브/공식 스펙을 분리해서 비교",
+  },
+];
 
 export default function Home() {
-  const [query, setQuery] = useState("React 19에서 폼 처리 방식이 어떻게 바뀌었는지 공식 문서 기준으로 정리해줘");
-  const [data, setData] = useState<SearchResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function runSearch(fixture = false) {
-    setLoading(true);
-    setError(null);
-    setData(null);
-    const qs = new URLSearchParams({ q: query });
-    if (fixture) qs.set("fixture", "1");
-    const res = await fetch(`/api/search?${qs.toString()}`);
-    const payload = await res.json();
-    if (!res.ok) setError(payload.error ?? "검색에 실패했습니다.");
-    else setData(payload);
-    setLoading(false);
-  }
-
-  return (
-    <main>
-      <section className="hero">
-        <div className="badge">zerocho.dev · live search thread</div>
-        <h1>AI 검색 API, 안에서 뭐 하는지 직접 까봅니다.</h1>
-        <p>질문 하나를 공식문서용 영어 검색어로 바꾸고, 실제 구글 SERP를 가져와서 중복 제거와 리랭킹까지 돌립니다.</p>
-        <div className="pipeline">
-          <span>query expansion</span><span>Google SERP</span><span>dedupe</span><span>rerank</span><span>JSON API</span>
-        </div>
-      </section>
-
-      <section className="card">
-        <h2>검색어</h2>
-        <p>버튼을 눌렀을 때만 Bright Data SERP API를 호출합니다.</p>
-        <div className="searchBox">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} aria-label="검색어" />
-          <button disabled={loading} onClick={() => runSearch(false)}>실제 호출</button>
-          <button disabled={loading} onClick={() => runSearch(true)}>샘플 보기</button>
-        </div>
-        {loading && <p>검색 스레드 작성 중…</p>}
-        {error && <p className="warning">{error}</p>}
-      </section>
-
-      {data && (
-        <section className="card">
-          <h2>검색 스레드</h2>
-          <div className="grid">
-            <div className="metric"><strong>{data.mode}</strong><span>mode</span></div>
-            <div className="metric"><strong>{data.resultCount}</strong><span>results</span></div>
-            <div className="metric"><strong>{data.uniqueDomains}</strong><span>domains</span></div>
-          </div>
-          {data.note && <p className="warning">{data.note}</p>}
-          <h3>확장 쿼리</h3>
-          <pre>{JSON.stringify(data.expandedQueries, null, 2)}</pre>
-          <div className="results">
-            {data.results.map((item) => (
-              <article className="result" key={item.url}>
-                <a href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
-                <p>{item.description}</p>
-                <div className="meta">
-                  {item.domain} · {item.sourceQuery} · <span className="score">score {item.score}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-    </main>
-  );
+  return <main>
+    <section className="hero">
+      <div className="badge">Bright Data SERP API · vertical research lab</div>
+      <h1>검색 엔진이 결과를 어떻게 조립하는지 중간 과정을 보여줍니다.</h1>
+      <p>B2C 서비스처럼 포장하지 않고, raw 결과부터 도메인 클러스터링, 중복 제거, 필터링, 팬아웃 쿼리, RRF/BM25-lite 리랭킹까지 그대로 노출합니다.</p>
+      <div className="pipeline"><span>raw results</span><span>domain cluster</span><span>dedupe</span><span>filter</span><span>research mode</span><span>rerank</span></div>
+    </section>
+    <section className="card">
+      <h2>버티컬 3개</h2>
+      <div className="results">
+        {labs.map((lab) => <article className="result" key={lab.href}>
+          <Link href={lab.href}>{lab.title}</Link>
+          <p>{lab.desc}</p>
+          <div className="meta">Bright Data SERP API · Google/Bing · KR/US/JP · include/exclude domain</div>
+        </article>)}
+      </div>
+    </section>
+    <section className="card">
+      <h2>촬영 포인트</h2>
+      <p>완성된 답만 보여주는 게 아니라 “왜 이 결과가 위로 올라왔는지”를 설명합니다.</p>
+      <pre>{`RRF = 1 / (60 + 검색순위)\nBM25-lite = 질문 단어가 제목/설명에 얼마나 겹치는지\nVertical boost = 에러검색은 공식문서/GitHub/Q&A, 여행은 예약/후기/커뮤니티, 제품은 커뮤니티/후기/쇼핑/영상에 가중치`}</pre>
+    </section>
+  </main>;
 }

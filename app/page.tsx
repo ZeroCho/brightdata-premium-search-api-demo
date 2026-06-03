@@ -27,7 +27,7 @@ export default function Home() {
       <section className="hero">
         <div className="badge">zerocho.dev · live search thread</div>
         <h1>AI 검색 API, 안에서 뭐 하는지 직접 까봅니다.</h1>
-        <p>질문 하나를 여러 검색어로 쪼개고, 실제 구글 SERP를 가져와서 중복 제거와 리랭킹까지 돌립니다.</p>
+        <p>질문 하나를 공식문서용 영어 검색어로 바꾸고, 실제 구글 SERP를 가져와서 중복 제거와 리랭킹까지 돌립니다.</p>
         <div className="pipeline">
           <span>query expansion</span><span>Google SERP</span><span>dedupe</span><span>rerank</span><span>JSON API</span>
         </div>

@@ -93,10 +93,29 @@ export function rankResults(items: SerpItem[], originalQuery: string): RankedIte
     .slice(0, 10);
 }
 
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
 export function parseBrightDataResponse(data: unknown, sourceQuery: string): SerpItem[] {
   const root = data as Record<string, unknown>;
-  const body = root.body as Record<string, unknown> | undefined;
-  const candidates = [root.organic, root.results, root.search_results, body?.organic, body?.results];
+  const parsedBody = parseMaybeJson(root.body) as Record<string, unknown> | undefined;
+  const parsedData = parseMaybeJson(root.data) as Record<string, unknown> | undefined;
+  const candidates = [
+    root.organic,
+    root.results,
+    root.search_results,
+    parsedBody?.organic,
+    parsedBody?.results,
+    parsedBody?.search_results,
+    parsedData?.organic,
+    parsedData?.results,
+  ];
   const arr = candidates.find(Array.isArray) as Array<Record<string, unknown>> | undefined;
   if (!arr) return [];
   return arr.map((r, idx) => ({

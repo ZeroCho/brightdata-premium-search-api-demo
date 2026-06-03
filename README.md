@@ -10,8 +10,8 @@ Bright Data SERP API로 실제 구글 검색 결과를 가져오고, 쿼리 확�
 
 ## Related Demo Variants
 
-- 공식문서 우선 검색 API: http://76.13.187.180:3118
-- 브랜드/경쟁사 모니터링: http://76.13.187.180:3119
+- 공식문서 우선 검색 API: `/docs-search`
+- 브랜드/경쟁사 모니터링: `/brand-monitor`
 
 ## GitHub Repository
 

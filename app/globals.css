@@ -179,6 +179,62 @@ button:disabled { opacity: .5; cursor: wait; }
 .meta { color: var(--soft); font-size: 12px; margin-top: 7px; }
 .score { color: var(--good); font-weight: 850; }
 .warning { color: var(--warn); font-weight: 700; }
+.finalCard {
+  background: #fffef8;
+  border-color: #d8c78a;
+}
+.finalCard::before { background: #111; border-color: #111; }
+.finalResults { gap: 10px; }
+.finalResult {
+  border: 1px solid #d8c78a;
+  border-radius: 16px !important;
+  background: linear-gradient(180deg, #fffdf2 0%, #fff 60%);
+  box-shadow: 0 10px 26px rgba(17,17,17,.06);
+  margin-bottom: 10px;
+}
+.finalResult::before { background: #111; border-color: #111; }
+.finalResult.rank1 {
+  border-color: #111;
+  background: #fff8cc;
+  box-shadow: 0 12px 32px rgba(17,17,17,.12);
+}
+.finalResult.rank1 a { font-size: 18px; }
+.rankBadge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #111;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+.reasonChips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.reasonChips span {
+  border: 1px solid #d8c78a;
+  background: #fff6c7;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #544500;
+  font-size: 12px;
+  font-weight: 800;
+}
+.formulaBox {
+  border: 1px solid #d8c78a;
+  background: #fffdf2;
+  border-radius: 14px;
+  padding: 14px;
+  margin-top: 10px;
+}
+.formulaBox strong { display: block; letter-spacing: -0.02em; }
+code {
+  background: #f0f0ea;
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
 pre {
   white-space: pre-wrap;
   overflow-x: auto;

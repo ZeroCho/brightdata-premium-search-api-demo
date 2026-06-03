@@ -11,15 +11,31 @@ type Props = {
   examples: string[];
 };
 
-function ResultList({ title, items, showScore = false }: { title: string; items: any[]; showScore?: boolean }) {
+function scoreReasons(x: any) {
+  const s = x.signals ?? {};
+  const reasons = [];
+  if ((s.rrf ?? 0) > 0.014) reasons.push("SERP 상위권");
+  if ((s.bm25Lite ?? 0) >= 0.25) reasons.push("질문 단어 일치");
+  if ((s.verticalBoost ?? 0) > 0) reasons.push(`${x.category} 가중치`);
+  if ((s.domainDiversity ?? 0) >= 1) reasons.push("도메인 다양성");
+  if ((s.penalty ?? 0) > 0) reasons.push("광고/소셜 감점");
+  return reasons.slice(0, 4);
+}
+
+function ResultList({ title, items, showScore = false, highlight = false }: { title: string; items: any[]; showScore?: boolean; highlight?: boolean }) {
   return <>
     <h3>{title}</h3>
-    <div className="results">
-      {(items ?? []).slice(0, 12).map((x: any, i: number) => (
-        <article className="result" key={`${title}-${x.url}-${i}`}>
+    <div className={highlight ? "results finalResults" : "results"}>
+      {(items ?? []).slice(0, highlight ? 8 : 12).map((x: any, i: number) => (
+        <article className={highlight ? `result finalResult rank${i + 1}` : "result"} key={`${title}-${x.url}-${i}`}>
+          {highlight && <div className="rankBadge">#{i + 1}</div>}
           <a href={x.url} target="_blank" rel="noreferrer">{x.title}</a>
           <p>{x.description || x.snippet}</p>
-          <div className="meta">{x.domain} · {x.category} · query: {x.sourceQuery}{showScore ? ` · score ${x.score}` : ""}</div>
+          {highlight && <div className="reasonChips">{scoreReasons(x).map((r) => <span key={r}>{r}</span>)}</div>}
+          <div className="meta">
+            {x.domain} · {x.category} · query: {x.sourceQuery}
+            {showScore ? <><br /><span className="score">score {x.score}</span> <span> = RRF {(x.signals?.rrf ?? 0).toFixed(4)}×45 + BM25-lite {(x.signals?.bm25Lite ?? 0).toFixed(2)}×25 + 다양성 {(x.signals?.domainDiversity ?? 0).toFixed(2)}×12 + 출처가중치 {(x.signals?.verticalBoost ?? 0).toFixed(2)}×45 - 페널티 {(x.signals?.penalty ?? 0).toFixed(2)}×40</span></> : ""}
+          </div>
         </article>
       ))}
     </div>
@@ -91,11 +107,28 @@ export default function ResearchLab(props: Props) {
     </section>
 
     {data && <>
+      <section className="card finalCard">
+        <h2>최종 결과: 리랭킹 후 우선순위</h2>
+        <p>아래가 실제로 사용자에게 먼저 보여줄 후보입니다. 단순 검색순위가 아니라 RRF, 질문 단어 매칭, 도메인 다양성, 버티컬별 출처 가중치, 페널티를 합쳐 다시 정렬했습니다.</p>
+        <ResultList title="하이라이트 결과" items={data.rerankedResults} showScore highlight />
+      </section>
+
       <section className="card">
         <h2>중간 결과 요약</h2>
         <div className="grid"><div className="metric"><strong>{data.rawCount}</strong><span>raw</span></div><div className="metric"><strong>{data.dedupedCount}</strong><span>deduped</span></div><div className="metric"><strong>{data.filteredCount}</strong><span>filtered</span></div></div>
         <h3>팬아웃 쿼리</h3><pre>{JSON.stringify(data.fanoutQueries, null, 2)}</pre>
-        <h3>원리</h3>{data.explanation.map((x: string)=><p key={x}>{x}</p>)}
+        <h3>리랭킹 원리</h3>
+        <div className="formulaBox">
+          <strong>최종점수 = RRF×45 + BM25-lite×25 + 도메인다양성×12 + 버티컬출처가중치×45 - 페널티×40</strong>
+          <ul>
+            <li><b>RRF</b>: 검색엔진 원래 순위가 높을수록 점수를 줍니다. 계산식은 <code>1 / (60 + 원래순위)</code>입니다. 1등은 약 0.0163, 10등은 약 0.0142라서 순위 차이를 완만하게 반영합니다.</li>
+            <li><b>BM25-lite</b>: 진짜 BM25 전체 구현은 아니고, 질문 토큰이 제목/설명/도메인에 얼마나 겹치는지 본 간단 버전입니다. <code>겹친 질문 단어 수 / 질문 단어 수</code>입니다.</li>
+            <li><b>도메인 다양성</b>: 같은 도메인이 너무 많이 몰리면 점수를 낮춥니다. <code>1 / 해당 도메인 결과 수</code>입니다.</li>
+            <li><b>버티컬 출처 가중치</b>: 개발자 에러는 공식문서/GitHub/Q&A, 여행은 예약·리뷰/블로그/커뮤니티, 제품은 커뮤니티/후기/쇼핑/영상에 가산점을 줍니다.</li>
+            <li><b>페널티</b>: 광고성 URL, 소셜/핀터레스트류처럼 리서치 품질이 낮은 출처는 감점합니다.</li>
+          </ul>
+        </div>
+        <h3>파이프라인 설명</h3>{data.explanation.map((x: string)=><p key={x}>{x}</p>)}
       </section>
 
       <section className="card">
@@ -106,7 +139,7 @@ export default function ResearchLab(props: Props) {
       <section className="card"><ResultList title="1. Raw 결과" items={data.rawResults} /></section>
       <section className="card"><ResultList title="2. 중복 제거 후" items={data.dedupedResults} /></section>
       <section className="card"><ResultList title="3. 필터 적용 후" items={data.filteredResults} /></section>
-      <section className="card"><ResultList title="4. RRF/BM25-lite 리랭킹" items={data.rerankedResults} showScore /></section>
+      <section className="card"><ResultList title="4. 리랭킹 상세: 전체 후보 점수" items={data.rerankedResults} showScore /></section>
     </>}
   </main>;
 }

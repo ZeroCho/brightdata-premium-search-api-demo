@@ -156,8 +156,8 @@ export function analyzeResults(items: SerpItem[], params: ResearchParams): Omit<
   const qTokens = new Set(tokenize(params.query));
 
   const rerankedResults = filteredResults.map((item) => {
-    const textTokens = tokenize(`${item.title} ${item.description ?? ""} ${item.domain}`);
-    const matched = textTokens.filter((t) => qTokens.has(t)).length;
+    const textTokens = new Set(tokenize(`${item.title} ${item.description ?? ""} ${item.domain}`));
+    const matched = [...qTokens].filter((t) => textTokens.has(t)).length;
     const bm25Lite = qTokens.size ? matched / qTokens.size : 0;
     const rrf = 1 / (60 + item.rank);
     const domainDiversity = 1 / (domainCounts.get(item.domain) ?? 1);
@@ -238,6 +238,8 @@ export function buildExplanation() {
     "2. Cluster: 도메인 기준으로 결과를 묶어 어떤 출처가 많이 나왔는지 봅니다.",
     "3. Dedupe: URL의 query/hash를 제거해 같은 문서를 하나로 합칩니다.",
     "4. Filter: 결과 개수, 포함/제외 도메인, 엔진, 지역/언어 옵션을 적용합니다.",
-    "5. Rerank: RRF(상위 노출 보정) + BM25-lite(질문 단어 매칭) + 버티컬별 출처 가중치를 합산합니다.",
+    "5. Rerank: RRF + BM25-lite + 도메인 다양성 + 버티컬별 출처 가중치 - 품질 페널티를 합산해 최종 결과를 다시 정렬합니다.",
+    "   공식: score = RRF×45 + BM25-lite×25 + domainDiversity×12 + verticalBoost×45 - penalty×40",
+    "   RRF는 1/(60+원래순위), BM25-lite는 질문 토큰과 제목/설명/도메인 토큰의 겹침 비율입니다.",
   ];
 }

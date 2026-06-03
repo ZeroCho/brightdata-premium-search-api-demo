@@ -1,49 +1,54 @@
 # Bright Data 프리미엄 검색 API 데모
 
-Bright Data SERP API로 흔히 말하는 “프리미엄 검색 API”의 핵심 파이프라인을 직접 조립한 Next.js App Router + TypeScript 예제입니다.
+Bright Data SERP API로 실제 구글 검색 결과를 가져오고, 쿼리 확장/중복 제거/리랭킹을 거쳐 AI 앱용 JSON 검색 API로 만드는 Next.js App Router + TypeScript 데모입니다.
 
 ## Live Demo
 
-- Vercel: 배포 후 URL 입력
-- API endpoint: `/api/search?q=프리미엄%20검색%20API`
+- VPS preview: http://76.13.187.180:3117
+- API endpoint: `/api/search?q=React%2019%20폼%20처리`
+- Vercel: GitHub/Vercel 인증 후 입력 예정
+
+## Related Demo Variants
+
+- 공식문서 우선 검색 API: http://76.13.187.180:3118
+- 브랜드/경쟁사 모니터링: http://76.13.187.180:3119
 
 ## GitHub Repository
 
-- Public GitHub repo: 생성 후 URL 입력
+- Public GitHub repo: GitHub 인증 후 생성 예정
 
 ## 핵심 기능
 
-- LLM/에이전트 검색 API에서 자주 쓰는 쿼리 확장 흐름을 코드로 단순화
+- 검색어를 여러 쿼리로 확장
 - Bright Data SERP API 팬아웃 호출
 - URL 정규화 및 중복 제거
 - 도메인 다양성, 쿼리 커버리지, RRF, BM25-lite 신호 기반 리랭킹
 - `/api/search`에서 최종 JSON 반환
-- UI에서 검색 결과와 리랭킹 점수 표시
+- UI에서 결과와 점수 표시
 
-## 로컬 실행 방법
+## 로컬 실행
 
 ```bash
 npm install
 cp .env.example .env.local
-# .env.local에 Bright Data 값 입력
 npm run dev
 ```
 
-브라우저에서 `http://localhost:3000`을 열면 됩니다.
+브라우저: `http://localhost:3000`
 
-## Bright Data API 키 설정 방법
+## Bright Data API 키 설정
 
-1. Bright Data 콘솔에 로그인합니다: https://brightdata.com/cp/start
-2. SERP API zone을 생성합니다: https://brightdata.com/cp/learn_more/serp-api
-3. API key를 발급합니다.
-4. `.env.local` 또는 Vercel Environment Variables에 아래 값을 설정합니다.
+1. Bright Data 콘솔 로그인: https://brightdata.com/cp/start
+2. SERP API zone 생성: https://brightdata.com/cp/learn_more/serp-api
+3. API key 발급
+4. `.env.local` 또는 Vercel Environment Variables에 설정
 
 ```bash
 BRIGHT_DATA_API_KEY=your_bright_data_api_key
 BRIGHT_DATA_SERP_ZONE=serp_api1
 ```
 
-## Vercel 배포 방법
+## Vercel 배포
 
 ```bash
 npm install -g vercel
@@ -53,12 +58,9 @@ vercel env add BRIGHT_DATA_SERP_ZONE production
 vercel --prod
 ```
 
-배포 후 README의 Live Demo URL을 실제 URL로 바꿉니다.
+## Mock/fixture 주의
 
-## Mock/fixture 관련 주의
-
-`DEMO_MODE=fixture` 또는 `/api/search?fixture=1`은 API 키가 없는 촬영/오프라인 확인용입니다.
-협업 제출용 라이브 데모는 이 모드를 쓰면 안 됩니다. 프로덕션 Vercel 환경에서는 `BRIGHT_DATA_API_KEY`와 `BRIGHT_DATA_SERP_ZONE`을 설정해서 런타임에서 Bright Data SERP API를 실제 호출해야 합니다.
+`DEMO_MODE=fixture` 또는 `/api/search?fixture=1`은 오프라인 확인용입니다. 제출용 라이브 데모는 런타임에서 Bright Data SERP API를 실제 호출해야 합니다.
 
 ## 광고 고지 예시
 

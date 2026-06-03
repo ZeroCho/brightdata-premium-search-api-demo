@@ -1,6 +1,6 @@
 import { domainOf, normalizeUrl, parseBrightDataResponse, type SerpItem } from "./searchPipeline";
 
-export type Vertical = "dev-error" | "travel" | "product";
+export type Vertical = "dev-error" | "product" | "company";
 export type ResearchParams = {
   vertical: Vertical;
   query: string;
@@ -63,13 +63,13 @@ export function expandVerticalQueries(vertical: Vertical, query: string, researc
     ])).slice(0, 5);
   }
 
-  if (vertical === "travel") {
+  if (vertical === "company") {
     return Array.from(new Set([
-      `${q} 호텔 후기 가격 위치`,
-      `${q} hotel review price location`,
-      `${q} site:booking.com OR site:agoda.com`,
-      `${q} 여행 블로그 후기 단점`,
-      `${q} reddit tripadvisor review`,
+      `${q} 회사 평판 연봉 면접 후기`,
+      `${q} employee review salary interview`,
+      `${q} blind 잡플래닛 원티드 회사 후기`,
+      `${q} reddit glassdoor company review`,
+      `${q} news layoff culture hiring`,
     ])).slice(0, 5);
   }
 
@@ -90,8 +90,11 @@ function categoryFor(domain: string, title: string, vertical: Vertical) {
   if (/stackoverflow\.com|stackexchange\.com/.test(d)) return "Q&A";
   if (/reddit\.com|blind|clien|fmkorea|dcinside|community|forum/.test(d)) return "커뮤니티";
   if (/youtube\.com|youtu\.be/.test(d)) return "영상";
-  if (/booking\.com|agoda|tripadvisor|hotels\.com|expedia/.test(d)) return "예약/리뷰";
-  if (/naver|tistory|medium|velog|blog/.test(d) || /후기|review/.test(t)) return "블로그/후기";
+  if (/blind|teamblind/.test(d)) return "직장인 커뮤니티";
+  if (/jobplanet|glassdoor|wanted|saramin|jobkorea|remember/.test(d)) return "채용/평판";
+  if (/linkedin/.test(d)) return "프로필/채용";
+  if (/news|hankyung|mk\.co\.kr|chosun|joongang|zdnet|itworld|etnews/.test(d)) return "뉴스";
+  if (/naver|tistory|medium|velog|blog/.test(d) || /후기|review|면접|연봉|문화/.test(t)) return "블로그/후기";
   if (vertical === "product" && /coupang|amazon|danawa|shopping|store/.test(d)) return "쇼핑/가격";
   return "웹문서";
 }
@@ -105,9 +108,9 @@ function verticalBoost(item: ResearchItem, vertical: Vertical) {
     if (["공식문서", "GitHub", "Q&A"].includes(item.category)) return 0.35;
     if (item.category === "블로그/후기") return 0.08;
   }
-  if (vertical === "travel") {
-    if (["예약/리뷰", "블로그/후기", "커뮤니티"].includes(item.category)) return 0.3;
-    if (item.category === "영상") return 0.12;
+  if (vertical === "company") {
+    if (["직장인 커뮤니티", "채용/평판", "뉴스", "블로그/후기"].includes(item.category)) return 0.32;
+    if (item.category === "프로필/채용") return 0.12;
   }
   if (vertical === "product") {
     if (["커뮤니티", "블로그/후기", "쇼핑/가격", "영상"].includes(item.category)) return 0.3;
@@ -218,11 +221,11 @@ export function fixtureFor(vertical: Vertical, query: string): SerpItem[] {
     common("stackoverflow.com", "Hydration failed because initial UI does not match", 3),
     common("velog.io", "Next.js hydration error 해결 후기", 4),
   ];
-  if (vertical === "travel") return [
-    common("booking.com", "Osaka family hotel Namba review", 1),
-    common("tripadvisor.com", "Osaka hotel family trip reviews", 2),
-    common("blog.naver.com", "오사카 3박4일 가족여행 호텔 후기", 3),
-    common("agoda.com", "Osaka Namba hotel price comparison", 4),
+  if (vertical === "company") return [
+    common("teamblind.com", "토스 이직 후기 조직문화 연봉", 1),
+    common("jobplanet.co.kr", "토스 회사 평점 면접 후기", 2),
+    common("wanted.co.kr", "토스 채용 포지션 복지", 3),
+    common("news.example.com", "토스 최근 채용과 조직문화 뉴스", 4),
   ];
   return [
     common("reddit.com", "MacBook Air M4 developer review long term", 1),

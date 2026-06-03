@@ -8,6 +8,12 @@ Bright Data SERP API로 실제 구글 검색 결과를 가져오고, 쿼리 확�
 - API endpoint: `/api/search?q=React%2019%20폼%20처리`
 - Vercel: GitHub/Vercel 인증 후 입력 예정
 
+## Search Pipeline Labs
+
+- 1. 개발자 에러 검색 엔진: `/dev-error-search`
+- 2. 전자제품 실사용 후기 검색 엔진: `/product-search`
+- 3. 취업/이직 회사 평판 검색 엔진: `/company-search`
+
 ## Related Demo Variants
 
 - 공식문서 우선 검색 API: `/docs-search`

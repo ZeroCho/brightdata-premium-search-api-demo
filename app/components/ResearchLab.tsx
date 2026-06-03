@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 type Props = {
-  vertical: "dev-error" | "travel" | "product";
+  vertical: "dev-error" | "product" | "company";
   badge: string;
   title: string;
   description: string;
@@ -124,7 +124,7 @@ export default function ResearchLab(props: Props) {
             <li><b>RRF</b>: 검색엔진 원래 순위가 높을수록 점수를 줍니다. 계산식은 <code>1 / (60 + 원래순위)</code>입니다. 1등은 약 0.0163, 10등은 약 0.0142라서 순위 차이를 완만하게 반영합니다.</li>
             <li><b>BM25-lite</b>: 진짜 BM25 전체 구현은 아니고, 질문 토큰이 제목/설명/도메인에 얼마나 겹치는지 본 간단 버전입니다. <code>겹친 질문 단어 수 / 질문 단어 수</code>입니다.</li>
             <li><b>도메인 다양성</b>: 같은 도메인이 너무 많이 몰리면 점수를 낮춥니다. <code>1 / 해당 도메인 결과 수</code>입니다.</li>
-            <li><b>버티컬 출처 가중치</b>: 개발자 에러는 공식문서/GitHub/Q&A, 여행은 예약·리뷰/블로그/커뮤니티, 제품은 커뮤니티/후기/쇼핑/영상에 가산점을 줍니다.</li>
+            <li><b>버티컬 출처 가중치</b>: 개발자 에러는 공식문서/GitHub/Q&A, 제품은 커뮤니티/후기/쇼핑/영상, 회사 평판은 직장인 커뮤니티/채용평판/뉴스에 가산점을 줍니다.</li>
             <li><b>페널티</b>: 광고성 URL, 소셜/핀터레스트류처럼 리서치 품질이 낮은 출처는 감점합니다.</li>
           </ul>
         </div>

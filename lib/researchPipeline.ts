@@ -1,6 +1,22 @@
 import { domainOf, normalizeUrl, parseBrightDataResponse, type SerpItem } from "./searchPipeline";
 
 export type Vertical = "dev-error" | "product" | "company";
+export type RerankWeights = {
+  rrf: number;
+  bm25Lite: number;
+  domainDiversity: number;
+  verticalBoost: number;
+  penalty: number;
+};
+
+export const DEFAULT_RERANK_WEIGHTS: RerankWeights = {
+  rrf: 45,
+  bm25Lite: 25,
+  domainDiversity: 12,
+  verticalBoost: 45,
+  penalty: 40,
+};
+
 export type ResearchParams = {
   vertical: Vertical;
   query: string;
@@ -11,6 +27,7 @@ export type ResearchParams = {
   engine: "google" | "bing";
   gl: string;
   hl: string;
+  weights: RerankWeights;
 };
 
 export type ResearchItem = SerpItem & {
@@ -39,6 +56,9 @@ export type ResearchResponse = {
   dedupedResults: ResearchItem[];
   filteredResults: ResearchItem[];
   rerankedResults: ResearchItem[];
+  dedupeRemoved: (ResearchItem & { removedReason: string; keptTitle?: string })[];
+  filterRemoved: (ResearchItem & { removedReason: string })[];
+  rerankChanges: (ResearchItem & { beforeRank: number; afterRank: number; rankDelta: number })[];
   queryErrors?: string[];
 };
 
@@ -136,10 +156,12 @@ export function analyzeResults(items: SerpItem[], params: ResearchParams): Omit<
 
   const seen = new Map<string, ResearchItem>();
   const dedupedResults: ResearchItem[] = [];
+  const dedupeRemoved: (ResearchItem & { removedReason: string; keptTitle?: string })[] = [];
   for (const item of rawResults) {
     const key = item.normalizedUrl.replace(/\/$/, "");
     if (seen.has(key)) {
       item.duplicateOf = key;
+      dedupeRemoved.push({ ...item, removedReason: "정규화 URL 중복", keptTitle: seen.get(key)?.title });
       continue;
     }
     seen.set(key, item);
@@ -148,11 +170,24 @@ export function analyzeResults(items: SerpItem[], params: ResearchParams): Omit<
 
   const include = params.includeDomains.map((x) => x.trim()).filter(Boolean);
   const exclude = params.excludeDomains.map((x) => x.trim()).filter(Boolean);
-  const filteredResults = dedupedResults.filter((item) => {
-    if (include.length && !include.some((d) => item.domain.includes(d))) return false;
-    if (exclude.some((d) => item.domain.includes(d))) return false;
-    return true;
-  }).slice(0, Math.max(1, Math.min(params.limit, 50)));
+  const filterRemoved: (ResearchItem & { removedReason: string })[] = [];
+  const filteredBeforeLimit: ResearchItem[] = [];
+  for (const item of dedupedResults) {
+    if (include.length && !include.some((d) => item.domain.includes(d))) {
+      filterRemoved.push({ ...item, removedReason: `포함 도메인 조건 불일치: ${include.join(", ")}` });
+      continue;
+    }
+    if (exclude.some((d) => item.domain.includes(d))) {
+      filterRemoved.push({ ...item, removedReason: `제외 도메인 필터: ${exclude.filter((d) => item.domain.includes(d)).join(", ")}` });
+      continue;
+    }
+    filteredBeforeLimit.push(item);
+  }
+  const safeLimit = Math.max(1, Math.min(params.limit, 50));
+  const filteredResults = filteredBeforeLimit.slice(0, safeLimit);
+  for (const item of filteredBeforeLimit.slice(safeLimit)) {
+    filterRemoved.push({ ...item, removedReason: `결과 개수 제한: 상위 ${safeLimit}개만 유지` });
+  }
 
   const domainCounts = new Map<string, number>();
   for (const item of filteredResults) domainCounts.set(item.domain, (domainCounts.get(item.domain) ?? 0) + 1);
@@ -166,9 +201,16 @@ export function analyzeResults(items: SerpItem[], params: ResearchParams): Omit<
     const domainDiversity = 1 / (domainCounts.get(item.domain) ?? 1);
     const vBoost = verticalBoost(item, params.vertical);
     const penalty = penalties(item);
-    const score = Number(((rrf * 45) + (bm25Lite * 25) + (domainDiversity * 12) + (vBoost * 45) - (penalty * 40)).toFixed(4));
+    const weights = params.weights ?? DEFAULT_RERANK_WEIGHTS;
+    const score = Number(((rrf * weights.rrf) + (bm25Lite * weights.bm25Lite) + (domainDiversity * weights.domainDiversity) + (vBoost * weights.verticalBoost) - (penalty * weights.penalty)).toFixed(4));
     return { ...item, score, signals: { rrf, bm25Lite, domainDiversity, verticalBoost: vBoost, penalty } };
   }).sort((a, b) => b.score - a.score);
+  const beforeRankByUrl = new Map(filteredResults.map((item, idx) => [item.normalizedUrl, idx + 1]));
+  const rerankChanges = rerankedResults.map((item, idx) => {
+    const beforeRank = beforeRankByUrl.get(item.normalizedUrl) ?? idx + 1;
+    const afterRank = idx + 1;
+    return { ...item, beforeRank, afterRank, rankDelta: beforeRank - afterRank };
+  });
 
   const clusterMap = new Map<string, DomainCluster>();
   for (const item of dedupedResults) {
@@ -188,6 +230,9 @@ export function analyzeResults(items: SerpItem[], params: ResearchParams): Omit<
     dedupedResults: dedupedResults.slice(0, 30),
     filteredResults,
     rerankedResults,
+    dedupeRemoved,
+    filterRemoved,
+    rerankChanges,
   };
 }
 
@@ -222,16 +267,16 @@ export function fixtureFor(vertical: Vertical, query: string): SerpItem[] {
     common("velog.io", "Next.js hydration error 해결 후기", 4),
   ];
   if (vertical === "company") return [
-    common("teamblind.com", "토스 이직 후기 조직문화 연봉", 1),
-    common("jobplanet.co.kr", "토스 회사 평점 면접 후기", 2),
-    common("wanted.co.kr", "토스 채용 포지션 복지", 3),
-    common("news.example.com", "토스 최근 채용과 조직문화 뉴스", 4),
+    common("teamblind.com", "카카오페이 개발자 평판 토론", 1, query, "직원들이 말하는 문화, 업무강도, 보상 관련 토론."),
+    common("jobplanet.co.kr", "카카오페이 잡플래닛 리뷰", 2, query, "직원 리뷰, 장단점, 면접 경험."),
+    common("wanted.co.kr", "카카오페이 면접 후기", 3, query, "면접 프로세스와 기술 질문 후기."),
+    common("news.example.com", "카카오페이 채용 뉴스", 4, query, "최근 채용과 조직 변화 관련 뉴스."),
   ];
   return [
-    common("reddit.com", "MacBook Air M4 developer review long term", 1),
-    common("youtube.com", "MacBook Air M4 real use review", 2),
-    common("danawa.com", "맥북 에어 M4 가격 비교", 3),
-    common("apple.com", "MacBook Air M4 technical specifications", 4),
+    common("rtings.com", "LG gram Pro long-term review", 1, query, "Battery, display, noise, and performance measurements."),
+    common("reddit.com", "LG gram Pro 실사용 발열 후기", 2, query, "Users discuss heat, fan noise, and battery in daily use."),
+    common("youtube.com", "LG gram Pro review video", 3, query, "Reviewer tests portability, keyboard, display, and editing workload."),
+    common("lg.com", "LG gram Pro official specs", 4, query, "Official product specifications from LG."),
   ];
 }
 
@@ -242,7 +287,8 @@ export function buildExplanation() {
     "3. Dedupe: URL의 query/hash를 제거해 같은 문서를 하나로 합칩니다.",
     "4. Filter: 결과 개수, 포함/제외 도메인, 엔진, 지역/언어 옵션을 적용합니다.",
     "5. Rerank: RRF + BM25-lite + 도메인 다양성 + 버티컬별 출처 가중치 - 품질 페널티를 합산해 최종 결과를 다시 정렬합니다.",
-    "   공식: score = RRF×45 + BM25-lite×25 + domainDiversity×12 + verticalBoost×45 - penalty×40",
+    `   기본 공식: score = RRF×${DEFAULT_RERANK_WEIGHTS.rrf} + BM25-lite×${DEFAULT_RERANK_WEIGHTS.bm25Lite} + domainDiversity×${DEFAULT_RERANK_WEIGHTS.domainDiversity} + verticalBoost×${DEFAULT_RERANK_WEIGHTS.verticalBoost} - penalty×${DEFAULT_RERANK_WEIGHTS.penalty}`,
+    "   화면에서 가중치를 직접 바꾸면 같은 raw SERP라도 리랭킹 순서가 달라지는 것을 바로 비교할 수 있습니다.",
     "   RRF는 1/(60+원래순위), BM25-lite는 질문 토큰과 제목/설명/도메인 토큰의 겹침 비율입니다.",
   ];
 }

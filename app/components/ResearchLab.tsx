@@ -11,18 +11,38 @@ type Props = {
   examples: string[];
 };
 
+type RerankWeights = {
+  rrf: number;
+  bm25Lite: number;
+  domainDiversity: number;
+  verticalBoost: number;
+  penalty: number;
+};
+
+const DEFAULT_WEIGHTS: RerankWeights = {
+  rrf: 45,
+  bm25Lite: 25,
+  domainDiversity: 12,
+  verticalBoost: 45,
+  penalty: 40,
+};
+
+function formulaText(weights: RerankWeights) {
+  return `RRF×${weights.rrf} + BM25-lite×${weights.bm25Lite} + 도메인다양성×${weights.domainDiversity} + 출처가중치×${weights.verticalBoost} - 페널티×${weights.penalty}`;
+}
+
 function scoreReasons(x: any) {
   const s = x.signals ?? {};
   const reasons = [];
-  if ((s.rrf ?? 0) > 0.014) reasons.push("SERP 상위권");
-  if ((s.bm25Lite ?? 0) >= 0.25) reasons.push("질문 단어 일치");
+  if ((s.rrf ?? 0) > 0.014) reasons.push("검색 상위");
+  if ((s.bm25Lite ?? 0) >= 0.25) reasons.push("질문과 가까움");
   if ((s.verticalBoost ?? 0) > 0) reasons.push(`${x.category} 가중치`);
-  if ((s.domainDiversity ?? 0) >= 1) reasons.push("도메인 다양성");
-  if ((s.penalty ?? 0) > 0) reasons.push("광고/소셜 감점");
+  if ((s.domainDiversity ?? 0) >= 1) reasons.push("도메인 분산");
+  if ((s.penalty ?? 0) > 0) reasons.push("품질 감점");
   return reasons.slice(0, 4);
 }
 
-function ResultList({ title, items, showScore = false, highlight = false }: { title: string; items: any[]; showScore?: boolean; highlight?: boolean }) {
+function ResultList({ title, items, showScore = false, highlight = false, weights = DEFAULT_WEIGHTS }: { title: string; items: any[]; showScore?: boolean; highlight?: boolean; weights?: RerankWeights }) {
   return <>
     <h3>{title}</h3>
     <div className={highlight ? "results finalResults" : "results"}>
@@ -34,12 +54,41 @@ function ResultList({ title, items, showScore = false, highlight = false }: { ti
           {highlight && <div className="reasonChips">{scoreReasons(x).map((r) => <span key={r}>{r}</span>)}</div>}
           <div className="meta">
             {x.domain} · {x.category} · query: {x.sourceQuery}
-            {showScore ? <><br /><span className="score">score {x.score}</span> <span> = RRF {(x.signals?.rrf ?? 0).toFixed(4)}×45 + BM25-lite {(x.signals?.bm25Lite ?? 0).toFixed(2)}×25 + 다양성 {(x.signals?.domainDiversity ?? 0).toFixed(2)}×12 + 출처가중치 {(x.signals?.verticalBoost ?? 0).toFixed(2)}×45 - 페널티 {(x.signals?.penalty ?? 0).toFixed(2)}×40</span></> : ""}
+            {showScore ? <><br /><span className="score">score {x.score}</span> <span> = RRF {(x.signals?.rrf ?? 0).toFixed(4)}×{weights.rrf} + BM25-lite {(x.signals?.bm25Lite ?? 0).toFixed(2)}×{weights.bm25Lite} + 다양성 {(x.signals?.domainDiversity ?? 0).toFixed(2)}×{weights.domainDiversity} + 출처가중치 {(x.signals?.verticalBoost ?? 0).toFixed(2)}×{weights.verticalBoost} - 페널티 {(x.signals?.penalty ?? 0).toFixed(2)}×{weights.penalty}</span></> : ""}
           </div>
         </article>
       ))}
     </div>
   </>;
+}
+
+function RemovedList({ title, items, emptyText }: { title: string; items: any[]; emptyText: string }) {
+  return <div className="removedPanel">
+    <h3>{title}</h3>
+    {(items ?? []).length === 0 ? <div className="emptyState">{emptyText}</div> : <div className="removedList">
+      {items.map((x: any, i: number) => <article className="removedItem" key={`${title}-${x.url}-${i}`}>
+        <strong>{x.title}</strong>
+        <p>{x.removedReason}</p>
+        <div className="meta">원래 raw {x.rank}위 · {x.domain} · query: {x.sourceQuery}</div>
+        {x.keptTitle && <div className="meta">남긴 항목: {x.keptTitle}</div>}
+        <code>{x.url}</code>
+      </article>)}
+    </div>}
+  </div>;
+}
+
+function RerankChanges({ items }: { items: any[] }) {
+  return <div className="rerankList">
+    {(items ?? []).length === 0 ? <div className="emptyState">정렬할 결과가 없습니다.</div> : items.slice(0, 12).map((x: any, i: number) => {
+      const label = x.rankDelta > 0 ? "상승" : x.rankDelta < 0 ? "하락" : "유지";
+      return <article className={`rerankItem ${x.rankDelta > 0 ? "up" : x.rankDelta < 0 ? "down" : "same"}`} key={`${x.url}-${i}`}>
+        <strong>{x.title}</strong>
+        <div className="rankMove"><span>필터 {x.beforeRank}위</span><b>→</b><span>정렬 {x.afterRank}위</span><em>{label}</em><span>score {x.score}</span></div>
+        <p>{x.description || x.snippet}</p>
+        <div className="meta">{x.domain} · {x.category} · query: {x.sourceQuery}</div>
+      </article>;
+    })}
+  </div>;
 }
 
 export default function ResearchLab(props: Props) {
@@ -51,10 +100,17 @@ export default function ResearchLab(props: Props) {
   const [limit, setLimit] = useState(12);
   const [include, setInclude] = useState("");
   const [exclude, setExclude] = useState("");
-  const [fixture, setFixture] = useState(false);
+  const [데이터, setFixture] = useState(true);
+  const [weights, setWeights] = useState<RerankWeights>(DEFAULT_WEIGHTS);
+  const [devMode, setDevMode] = useState(false);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  function setWeight(key: keyof RerankWeights, value: string) {
+    const n = Number(value);
+    setWeights((prev) => ({ ...prev, [key]: Number.isFinite(n) ? Math.max(0, Math.min(200, n)) : 0 }));
+  }
 
   async function run() {
     setLoading(true); setError(""); setData(null);
@@ -68,8 +124,13 @@ export default function ResearchLab(props: Props) {
       limit: String(limit),
       include,
       exclude,
+      wRrf: String(weights.rrf),
+      wBm25Lite: String(weights.bm25Lite),
+      wDomainDiversity: String(weights.domainDiversity),
+      wVerticalBoost: String(weights.verticalBoost),
+      wPenalty: String(weights.penalty),
     });
-    if (fixture) qs.set("fixture", "1");
+    if (데이터) qs.set("데이터", "1");
     const res = await fetch(`/api/research?${qs}`);
     const payload = await res.json();
     if (!res.ok) setError(payload.error || "실패");
@@ -77,69 +138,115 @@ export default function ResearchLab(props: Props) {
     setLoading(false);
   }
 
-  return <main>
+  return <div className="researchLab">
     <section className="hero">
       <div className="badge">{props.badge}</div>
       <h1>{props.title}</h1>
       <p>{props.description}</p>
-      <div className="pipeline"><span>raw SERP</span><span>domain clustering</span><span>dedupe</span><span>filters</span><span>fanout research</span><span>RRF/BM25-lite</span></div>
+      {devMode && <div className="pipeline"><span>원본 결과</span><span>도메인 묶기</span><span>중복 제거</span><span>필터</span><span>검색어 확장</span><span>점수 계산</span></div>}
     </section>
 
-    <section className="card">
-      <h2>입력</h2>
-      <div className="searchBox"><input value={q} onChange={(e)=>setQ(e.target.value)} /><button disabled={loading} onClick={run}>파이프라인 실행</button></div>
-      <div className="pipeline">{props.examples.map((x)=><button type="button" className="chipButton" key={x} onClick={()=>setQ(x)}>{x}</button>)}</div>
-    </section>
-
-    <section className="card">
-      <h2>필터 / 토글</h2>
-      <div className="controlGrid">
-        <label><span>리서치 모드</span><select value={research ? "1" : "0"} onChange={(e)=>setResearch(e.target.value === "1")}><option value="1">팬아웃 쿼리 확장 ON</option><option value="0">단일 쿼리</option></select></label>
-        <label><span>엔진</span><select value={engine} onChange={(e)=>setEngine(e.target.value)}><option value="google">Google</option><option value="bing">Bing</option></select></label>
-        <label><span>지역</span><select value={gl} onChange={(e)=>setGl(e.target.value)}><option value="kr">KR</option><option value="us">US</option><option value="jp">JP</option></select></label>
-        <label><span>언어</span><select value={hl} onChange={(e)=>setHl(e.target.value)}><option value="ko">ko</option><option value="en">en</option><option value="ja">ja</option></select></label>
-        <label><span>결과 개수</span><input type="number" min={3} max={30} value={limit} onChange={(e)=>setLimit(Number(e.target.value))} /></label>
-        <label><span>fixture</span><select value={fixture ? "1" : "0"} onChange={(e)=>setFixture(e.target.value === "1")}><option value="0">실제 Bright Data</option><option value="1">샘플</option></select></label>
+    <section className="card searchServiceCard">
+      <div className="sectionHeader serviceHeader">
+        <div>
+          <h2>검색</h2>
+          <p>{devMode ? "개발자 모드에서는 검색 과정과 점수 계산까지 같이 봅니다." : "질문을 입력하면 정리된 검색 결과만 보여줍니다."}</p>
+        </div>
+        <button type="button" className={devMode ? "toggleButton active" : "toggleButton"} onClick={() => setDevMode((v) => !v)}>
+          {devMode ? "개발자 모드 켜짐" : "개발자 모드"}
+        </button>
       </div>
-      <div className="searchBox"><input placeholder="포함 도메인: react.dev, github.com" value={include} onChange={(e)=>setInclude(e.target.value)} /><input placeholder="제외 도메인: pinterest.com, facebook.com" value={exclude} onChange={(e)=>setExclude(e.target.value)} /></div>
-      {loading && <p>raw SERP부터 다시 계산 중…</p>}
+      <div className="searchBox"><input value={q} onChange={(e)=>setQ(e.target.value)} /><button disabled={loading} onClick={run}>{loading ? "검색 중…" : "검색"}</button></div>
+      {devMode && <div className="pipeline">{props.examples.map((x)=><button type="button" className="chipButton" key={x} onClick={()=>setQ(x)}>{x}</button>)}</div>}
+      {loading && <p>검색 결과를 정리하는 중…</p>}
       {error && <p className="warning">{error}</p>}
     </section>
 
+    {devMode && <section className="card">
+      <h2>옵션</h2>
+      <div className="controlGrid">
+        <label><span>리서치 모드</span><select value={research ? "1" : "0"} onChange={(e)=>setResearch(e.target.value === "1")}><option value="1">검색어 확장</option><option value="0">한 번만 검색</option></select></label>
+        <label><span>엔진</span><select value={engine} onChange={(e)=>setEngine(e.target.value)}><option value="google">Google</option><option value="bing">Bing</option></select></label>
+        <label><span>지역</span><select value={gl} onChange={(e)=>setGl(e.target.value)}><option value="kr">KR</option><option value="us">US</option><option value="jp">JP</option></select></label>
+        <label><span>언어</span><select value={hl} onChange={(e)=>setHl(e.target.value)}><option value="ko">ko</option><option value="en">en</option><option value="ja">ja</option></select></label>
+        <label><span>표시 개수</span><input type="number" min={3} max={30} value={limit} onChange={(e)=>setLimit(Number(e.target.value))} /></label>
+        <label><span>데이터</span><select value={데이터 ? "1" : "0"} onChange={(e)=>setFixture(e.target.value === "1")}><option value="0">실제 API</option><option value="1">샘플 데이터</option></select></label>
+      </div>
+      <div className="searchBox"><input placeholder="포함할 도메인" value={include} onChange={(e)=>setInclude(e.target.value)} /><input placeholder="뺄 도메인" value={exclude} onChange={(e)=>setExclude(e.target.value)} /></div>
+    </section>}
+
+    {devMode && <section className="card weightCard">
+      <div className="sectionHeader">
+        <div>
+          <h2>점수 조절</h2>
+          <p>숫자를 바꾸고 다시 돌리면 순위가 달라집니다.</p>
+        </div>
+        <button type="button" className="secondaryButton" onClick={() => setWeights(DEFAULT_WEIGHTS)}>초기화</button>
+      </div>
+      <div className="weightGrid">
+        <label><span>RRF</span><input type="number" min={0} max={200} step={1} value={weights.rrf} onChange={(e)=>setWeight("rrf", e.target.value)} /></label>
+        <label><span>BM25-lite</span><input type="number" min={0} max={200} step={1} value={weights.bm25Lite} onChange={(e)=>setWeight("bm25Lite", e.target.value)} /></label>
+        <label><span>도메인 분산</span><input type="number" min={0} max={200} step={1} value={weights.domainDiversity} onChange={(e)=>setWeight("domainDiversity", e.target.value)} /></label>
+        <label><span>출처 가중치</span><input type="number" min={0} max={200} step={1} value={weights.verticalBoost} onChange={(e)=>setWeight("verticalBoost", e.target.value)} /></label>
+        <label><span>페널티</span><input type="number" min={0} max={200} step={1} value={weights.penalty} onChange={(e)=>setWeight("penalty", e.target.value)} /></label>
+      </div>
+      <div className="formulaPreview"><strong>점수식</strong><code>score = {formulaText(weights)}</code></div>
+    </section>}
+
     {data && <>
       <section className="card finalCard">
-        <h2>최종 결과: 리랭킹 후 우선순위</h2>
-        <p>아래가 실제로 사용자에게 먼저 보여줄 후보입니다. 단순 검색순위가 아니라 RRF, 질문 단어 매칭, 도메인 다양성, 버티컬별 출처 가중치, 페널티를 합쳐 다시 정렬했습니다.</p>
-        <ResultList title="하이라이트 결과" items={data.rerankedResults} showScore highlight />
+        <h2>{devMode ? "먼저 볼 결과" : "검색 결과"}</h2>
+        <p>{devMode ? "구글 순서 그대로가 아니라, 이 서비스 기준으로 다시 정렬한 결과입니다." : "가장 관련 높은 결과부터 정리했습니다."}</p>
+        <ResultList title={devMode ? "추천 결과" : "결과"} items={data.rerankedResults} showScore={devMode} highlight={devMode} weights={data.params?.weights ?? weights} />
+      </section>
+
+      {devMode && <>
+      <section className="card">
+        <h2>1. 원본 결과</h2>
+        <p>Bright Data SERP API에서 가져온 원재료입니다. 아직 중복 제거, 필터, 점수 계산을 적용하지 않은 상태입니다.</p>
+        <div className="grid"><div className="metric"><strong>{data.rawCount}</strong><span>원본 결과</span></div><div className="metric"><strong>{data.fanoutQueries?.length ?? 0}</strong><span>확장 검색어</span></div><div className="metric"><strong>{data.domainClusters?.length ?? 0}</strong><span>도메인 묶음</span></div></div>
+        <h3>확장된 검색어</h3><pre>{JSON.stringify(data.fanoutQueries, null, 2)}</pre>
+        <h3>도메인별 묶음</h3>
+        <div className="clusterGrid">{data.domainClusters.map((c:any)=><div className="cluster" key={c.domain}><strong>{c.domain}</strong><span>{c.count}개 · {c.category}</span></div>)}</div>
+        <ResultList title="원본 목록" items={data.rawResults} />
       </section>
 
       <section className="card">
-        <h2>중간 결과 요약</h2>
-        <div className="grid"><div className="metric"><strong>{data.rawCount}</strong><span>raw</span></div><div className="metric"><strong>{data.dedupedCount}</strong><span>deduped</span></div><div className="metric"><strong>{data.filteredCount}</strong><span>filtered</span></div></div>
-        <h3>팬아웃 쿼리</h3><pre>{JSON.stringify(data.fanoutQueries, null, 2)}</pre>
-        <h3>리랭킹 원리</h3>
+        <h2>2. 중복 제거</h2>
+        <p>같은 URL, UTM만 다른 URL, 같은 글로 보이는 결과를 합친 단계입니다.</p>
+        <div className="grid"><div className="metric"><strong>{data.rawCount}</strong><span>중복 제거 전</span></div><div className="metric"><strong>{data.dedupedCount}</strong><span>중복 제거 후</span></div><div className="metric"><strong>{(data.dedupeRemoved ?? []).length}</strong><span>중복으로 제외</span></div></div>
+        <RemovedList title="중복으로 뺀 결과" items={data.dedupeRemoved ?? []} emptyText="중복 없음" />
+        <ResultList title="중복 제거 후 목록" items={data.dedupedResults} />
+      </section>
+
+      <section className="card">
+        <h2>3. 필터 적용</h2>
+        <p>포함/제외 도메인, 광고성 결과, 품질 낮은 출처를 걸러낸 단계입니다.</p>
+        <div className="grid"><div className="metric"><strong>{data.dedupedCount}</strong><span>필터 전</span></div><div className="metric"><strong>{data.filteredCount}</strong><span>필터 후</span></div><div className="metric"><strong>{(data.filterRemoved ?? []).length}</strong><span>필터로 제외</span></div></div>
+        <RemovedList title="필터로 뺀 결과" items={data.filterRemoved ?? []} emptyText="필터 제외 없음" />
+        <ResultList title="필터 적용 후 목록" items={data.filteredResults} />
+      </section>
+
+      <section className="card">
+        <h2>4. 점수 상세</h2>
+        <p>필터를 통과한 결과에 RRF, BM25-lite, 도메인 분산, 출처 가중치, 페널티를 적용해서 최종 순서를 정합니다.</p>
         <div className="formulaBox">
-          <strong>최종점수 = RRF×45 + BM25-lite×25 + 도메인다양성×12 + 버티컬출처가중치×45 - 페널티×40</strong>
+          <strong>최종점수 = {formulaText(data.params?.weights ?? weights)}</strong>
+          <p className="muted">기본값은 RRF 45, BM25-lite 25, 도메인 분산 12, 출처 가중치 45, 페널티 40입니다. 위 입력값을 바꾸고 다시 실행하면 같은 원본 결과라도 정렬 순서가 달라집니다.</p>
           <ul>
-            <li><b>RRF</b>: 검색엔진 원래 순위가 높을수록 점수를 줍니다. 계산식은 <code>1 / (60 + 원래순위)</code>입니다. 1등은 약 0.0163, 10등은 약 0.0142라서 순위 차이를 완만하게 반영합니다.</li>
-            <li><b>BM25-lite</b>: 진짜 BM25 전체 구현은 아니고, 질문 토큰이 제목/설명/도메인에 얼마나 겹치는지 본 간단 버전입니다. <code>겹친 질문 단어 수 / 질문 단어 수</code>입니다.</li>
-            <li><b>도메인 다양성</b>: 같은 도메인이 너무 많이 몰리면 점수를 낮춥니다. <code>1 / 해당 도메인 결과 수</code>입니다.</li>
-            <li><b>버티컬 출처 가중치</b>: 개발자 에러는 공식문서/GitHub/Q&A, 제품은 커뮤니티/후기/쇼핑/영상, 회사 평판은 직장인 커뮤니티/채용평판/뉴스에 가산점을 줍니다.</li>
-            <li><b>페널티</b>: 광고성 URL, 소셜/핀터레스트류처럼 리서치 품질이 낮은 출처는 감점합니다.</li>
+            <li><b>RRF</b>: 원래 검색 순위도 반영합니다. 계산은 <code>1 / (60 + 원래순위)</code>입니다.</li>
+            <li><b>BM25-lite</b>: 제목과 설명에 질문 단어가 얼마나 겹치는지 봅니다. <code>겹친 질문 단어 수 / 질문 단어 수</code>입니다.</li>
+            <li><b>도메인 분산</b>: 한 도메인이 결과를 독점하지 않게 조절합니다. <code>1 / 해당 도메인 결과 수</code>입니다.</li>
+            <li><b>버티컬 출처 가중치</b>: 데모별로 믿을 만한 출처를 다르게 봅니다. 에러는 공식문서/GitHub, 후기는 커뮤니티/영상, 평판은 블라인드/잡플래닛/뉴스를 더 봅니다.</li>
+            <li><b>페널티</b>: 광고성 글이나 의미 없는 소셜 결과는 뒤로 보냅니다.</li>
           </ul>
         </div>
-        <h3>파이프라인 설명</h3>{data.explanation.map((x: string)=><p key={x}>{x}</p>)}
+        <h3>순위 변화</h3>
+        <RerankChanges items={data.rerankChanges ?? []} />
+        <ResultList title="점수 계산 후 최종 목록" items={data.rerankedResults} showScore weights={data.params?.weights ?? weights} />
+        <h3>처리 순서</h3>{data.explanation.map((x: string)=><p key={x}>{x}</p>)}
       </section>
-
-      <section className="card">
-        <h2>도메인 클러스터링</h2>
-        <div className="clusterGrid">{data.domainClusters.map((c:any)=><div className="cluster" key={c.domain}><strong>{c.domain}</strong><span>{c.count}개 · {c.category}</span></div>)}</div>
-      </section>
-
-      <section className="card"><ResultList title="1. Raw 결과" items={data.rawResults} /></section>
-      <section className="card"><ResultList title="2. 중복 제거 후" items={data.dedupedResults} /></section>
-      <section className="card"><ResultList title="3. 필터 적용 후" items={data.filteredResults} /></section>
-      <section className="card"><ResultList title="4. 리랭킹 상세: 전체 후보 점수" items={data.rerankedResults} showScore /></section>
+      </>}
     </>}
-  </main>;
+  </div>;
 }
